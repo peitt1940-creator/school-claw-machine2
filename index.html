@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>校園闖關夾娃娃抽獎系統</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap');
+        
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #f0fdf4;
+            overflow-x: hidden;
+        }
+
+        /* 動畫定義 */
+        @keyframes sway {
+            0%, 100% { transform: rotate(-2deg); }
+            50% { transform: rotate(2deg); }
+        }
+        @keyframes fade-in-up {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .claw-arm {
+            transform-origin: top center;
+            transition: all 0.5s ease;
+        }
+
+        /* 列印樣式 - 只在瀏覽器直接列印時生效 */
+        @media print {
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            body { background-color: white; }
+            /* 強制背景圖形列印 */
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        }
+
+        /* 裝飾球體樣式 */
+        .ball {
+            border-radius: 50%;
+            box-shadow: inset -5px -5px 10px rgba(0,0,0,0.2), 2px 2px 5px rgba(0,0,0,0.1);
+            background-image: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.4) 0%, rgba(0,0,0,0.1) 60%);
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // --- 圖示元件 ---
+        const Icons = {
+            Settings: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>,
+            Printer: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>,
+            Gift: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>,
+            RotateCcw: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>,
+            XCircle: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>,
+            Download: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+            Upload: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
+            FileText: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
+            Trash2: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+        };
+
+        const { Settings, Trash2, Printer, Gift, RotateCcw, XCircle, Download, Upload, FileText } = Icons;
+
+        const COLORS = [
+            'bg-red-400', 'bg-blue-400', 'bg-green-400', 'bg-yellow-400', 
+            'bg-purple-400', 'bg-pink-400', 'bg-orange-400', 'bg-teal-400'
+        ];
+
+        const BLESSINGS = ["祝您中大獎", "好運旺旺來", "闖關大成功", "天天都開心", "學業大進步", "心想事成"];
+
+        // 全域通知元件
+        const Notification = ({ message, type, onClose }) => {
+            if (!message) return null;
+            const bgColor = type === 'error' ? 'bg-red-500' : 'bg-green-500';
+            return (
+                <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 ${bgColor} text-white px-6 py-3 rounded-full shadow-lg z-50 flex items-center gap-2 animate-[fade-in-up_0.3s_ease-out]`}>
+                    <span>{message}</span>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [view, setView] = useState('home'); 
+            const [data, setData] = useState({ prizes: [], codes: {} });
+            const [showLoginModal, setShowLoginModal] = useState(false);
+            const [passwordInput, setPasswordInput] = useState("");
+            const [loginError, setLoginError] = useState("");
+            
+            // 通知訊息狀態
+            const [notification, setNotification] = useState({ msg: '', type: '' });
+
+            const showMsg = (msg, type = 'success') => {
+                setNotification({ msg, type });
+                setTimeout(() => setNotification({ msg: '', type: '' }), 3000);
+            };
+            
+            useEffect(() => {
+                const saved = localStorage.getItem('clawMachineData');
+                if (saved) {
+                    setData(JSON.parse(saved));
+                } else {
+                    const initialData = { prizes: [], codes: {} };
+                    setData(initialData);
+                }
+            }, []);
+
+            const saveData = (newData) => {
+                setData(newData);
+                localStorage.setItem('clawMachineData', JSON.stringify(newData));
+            };
+
+            // 生成亂碼邏輯
+            const generateCodes = () => {
+                if (data.prizes.length === 0) {
+                    showMsg("請先新增獎品才能生成亂碼！", "error");
+                    return;
+                }
+
+                const newCodes = {};
+                const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; 
+                
+                let totalGenerated = 0;
+                data.prizes.forEach(prize => {
+                    const count = parseInt(prize.count) || 0;
+                    for(let i=0; i<count; i++) {
+                        let code = '';
+                        let unique = false;
+                        let attempts = 0;
+                        while(!unique && attempts < 1000) {
+                            code = '';
+                            for(let j=0; j<4; j++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+                            if(!newCodes[code]) unique = true;
+                            attempts++;
+                        }
+                        if(unique) {
+                            newCodes[code] = { prizeId: prize.id, isUsed: false };
+                            totalGenerated++;
+                        }
+                    }
+                });
+                
+                saveData({ ...data, codes: newCodes });
+                showMsg(`生成完畢！共產生 ${totalGenerated} 組亂碼。`);
+            };
+
+            const exportConfig = () => {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
+                const downloadAnchorNode = document.createElement('a');
+                downloadAnchorNode.setAttribute("href", dataStr);
+                downloadAnchorNode.setAttribute("download", "claw_machine_config.json");
+                document.body.appendChild(downloadAnchorNode);
+                downloadAnchorNode.click();
+                downloadAnchorNode.remove();
+            };
+
+            const importConfig = (event) => {
+                const fileObj = event.target.files[0];
+                if (!fileObj) return;
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const importedData = JSON.parse(e.target.result);
+                        if (importedData.prizes && importedData.codes) {
+                            saveData(importedData);
+                            showMsg("設定檔讀取成功！");
+                        } else {
+                            showMsg("檔案格式錯誤", "error");
+                        }
+                    } catch (error) {
+                        showMsg("讀取失敗，檔案可能已損毀", "error");
+                    }
+                };
+                reader.readAsText(fileObj);
+                event.target.value = null; 
+            };
+
+            // 匯出 Word (優化版：表格形式 + 檢核表)
+            const exportToWord = () => {
+                if (Object.keys(data.codes).length === 0) {
+                    showMsg("目前沒有亂碼資料可匯出！", "error");
+                    return;
+                }
+
+                try {
+                    // 1. 代碼條 (給學生)
+                    // 以表格呈現，每列 3 張
+                    let ticketsRows = "";
+                    const codeKeys = Object.keys(data.codes);
+                    let rowBuffer = [];
+
+                    codeKeys.forEach((code, index) => {
+                        const blessing = BLESSINGS[index % BLESSINGS.length];
+                        const cell = `
+                            <td style="border: 1px dashed #000; padding: 15px; text-align: center; width: 33%;">
+                                <div style="font-size: 10pt; color: #555;">NO.${index + 1}</div>
+                                <div style="font-size: 28pt; font-weight: bold; font-family: monospace; margin: 5px 0;">${code}</div>
+                                <div style="font-size: 12pt; color: #000;">${blessing}</div>
+                            </td>
+                        `;
+                        rowBuffer.push(cell);
+
+                        if (rowBuffer.length === 3 || index === codeKeys.length - 1) {
+                            ticketsRows += `<tr>${rowBuffer.join('')}</tr>`;
+                            rowBuffer = [];
+                        }
+                    });
+
+                    const ticketsTable = `
+                        <h2 style="text-align:center">校園闖關 - 抽獎亂碼條</h2>
+                        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                            ${ticketsRows}
+                        </table>
+                    `;
+
+                    // 2. 檢核表 (給老師)
+                    let checkListRows = "";
+                    codeKeys.forEach((code, index) => {
+                        const codeData = data.codes[code];
+                        const prize = data.prizes.find(p => p.id === codeData.prizeId);
+                        const prizeName = prize ? prize.name : "未知";
+                        const prizeType = prize ? (prize.type === 'big' ? '★大獎' : (prize.type === 'none' ? '銘謝' : '普通')) : '';
+                        
+                        checkListRows += `
+                            <tr>
+                                <td style="border: 1px solid #000; padding: 5px; text-align: center;">${prizeType}</td>
+                                <td style="border: 1px solid #000; padding: 5px; text-align: center; font-family: monospace;">${code}</td>
+                                <td style="border: 1px solid #000; padding: 5px;">${prizeName}</td>
+                                <td style="border: 1px solid #000; padding: 5px;"></td>
+                            </tr>
+                        `;
+                    });
+
+                    const checkListTable = `
+                        <h2 style="text-align:center">抽獎檢核表 (教師用)</h2>
+                        <table style="width: 100%; border-collapse: collapse; border: 1px solid #000;">
+                            <thead>
+                                <tr style="background-color: #f0f0f0;">
+                                    <th style="border: 1px solid #000; padding: 8px; width: 15%;">標籤</th>
+                                    <th style="border: 1px solid #000; padding: 8px; width: 20%;">代碼</th>
+                                    <th style="border: 1px solid #000; padding: 8px; width: 40%;">獎品名稱</th>
+                                    <th style="border: 1px solid #000; padding: 8px; width: 25%;">獲獎人簽名</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${checkListRows}
+                            </tbody>
+                        </table>
+                    `;
+
+                    const htmlContent = `
+                        <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+                        <head><meta charset='utf-8'><title>抽獎資料匯出</title></head>
+                        <body>
+                            ${ticketsTable}
+                            <br style="page-break-before: always">
+                            ${checkListTable}
+                        </body>
+                        </html>
+                    `;
+
+                    const blob = new Blob(['\ufeff', htmlContent], { type: 'application/msword' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = '闖關抽獎資料.doc';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    showMsg("Word 檔下載已開始");
+                } catch(e) {
+                    console.error(e);
+                    showMsg("下載失敗，請嘗試使用列印功能", "error");
+                }
+            };
+
+            const handleLogin = (e) => {
+                e.preventDefault();
+                if (passwordInput === "8557") {
+                    setView('admin');
+                    setShowLoginModal(false);
+                    setPasswordInput("");
+                    setLoginError("");
+                } else {
+                    setLoginError("密碼錯誤");
+                    setPasswordInput("");
+                }
+            };
+
+            return (
+                <div className="min-h-screen relative">
+                    {/* 全域通知 */}
+                    <Notification message={notification.msg} type={notification.type} />
+
+                    {view === 'home' && <Home setView={setView} />}
+                    {view === 'game' && <GameInterface data={data} saveData={saveData} setView={setView} showMsg={showMsg} />}
+                    {view === 'admin' && (
+                        <AdminPanel 
+                            data={data} 
+                            saveData={saveData} 
+                            setView={setView} 
+                            generateCodes={generateCodes}
+                            exportConfig={exportConfig}
+                            importConfig={importConfig}
+                            exportToWord={exportToWord}
+                            showMsg={showMsg}
+                        />
+                    )}
+                    {view === 'print' && <PrintView data={data} setView={setView} exportToWord={exportToWord} />}
+
+                    {view === 'home' && (
+                        <button 
+                            onClick={() => setShowLoginModal(true)}
+                            className="fixed bottom-4 right-4 p-2 text-gray-300 hover:text-gray-500 transition no-print z-40"
+                        >
+                            <Settings size={24} />
+                        </button>
+                    )}
+
+                    {showLoginModal && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                            <div className="bg-white rounded-lg shadow-xl w-full max-w-sm overflow-hidden animate-[sway_0.3s_ease-out]">
+                                <div className="bg-pink-600 p-4 text-white font-bold flex justify-between items-center">
+                                    <span>教師後台登入</span>
+                                    <button onClick={() => setShowLoginModal(false)}><XCircle size={20}/></button>
+                                </div>
+                                <form onSubmit={handleLogin} className="p-6">
+                                    <label className="block text-gray-700 text-sm font-bold mb-2">管理密碼</label>
+                                    <input
+                                        type="password"
+                                        value={passwordInput}
+                                        onChange={(e) => setPasswordInput(e.target.value)}
+                                        className="w-full border p-2 rounded mb-4 focus:border-pink-500 focus:outline-none"
+                                        placeholder="請輸入密碼" 
+                                        autoFocus
+                                    />
+                                    {loginError && <div className="text-red-500 text-sm mb-4">{loginError}</div>}
+                                    <div className="flex justify-end gap-2">
+                                        <button 
+                                            type="button"
+                                            onClick={() => setShowLoginModal(false)}
+                                            className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
+                                        >
+                                            取消
+                                        </button>
+                                        <button 
+                                            type="submit"
+                                            className="px-4 py-2 bg-pink-600 text-white rounded hover:bg-pink-700"
+                                        >
+                                            登入
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const Home = ({ setView }) => (
+            <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-purple-600 to-indigo-800 text-white">
+                <div className="text-center animate-bounce mb-8">
+                    <Gift size={64} className="mx-auto mb-4 text-yellow-300" />
+                    <h1 className="text-5xl font-bold mb-2 text-shadow">歡樂夾娃娃</h1>
+                    <p className="text-xl opacity-80">闖關大抽獎</p>
+                </div>
+                
+                <button 
+                    onClick={() => setView('game')}
+                    className="bg-yellow-400 hover:bg-yellow-300 text-purple-900 text-2xl font-bold py-4 px-12 rounded-full shadow-lg transform transition hover:scale-105 active:scale-95 border-4 border-yellow-200"
+                >
+                    開始抽獎
+                </button>
+                <div className="absolute bottom-10 opacity-50 text-sm">準備好你的亂碼條了嗎？</div>
+            </div>
+        );
+
+        const GameInterface = ({ data, saveData, setView, showMsg }) => {
+            const [name, setName] = useState("");
+            const [code, setCode] = useState("");
+            const [gameState, setGameState] = useState("input");
+            const [result, setResult] = useState(null);
+            
+            // 底部的球堆
+            const [pileBalls, setPileBalls] = useState([]);
+
+            const clawRef = useRef(null);
+            const prizeInClawRef = useRef(null);
+
+            // 初始化球堆
+            useEffect(() => {
+                const newBalls = [];
+                // Z-index: 
+                // 10: 背景球
+                // 30: 爪子
+                // 50: 前景球 (用來遮擋)
+
+                const totalBalls = 140; // 大幅增加球數，製造厚實感
+                
+                for(let i=0; i<totalBalls; i++) {
+                    const bottomVal = Math.floor(Math.random() * Math.random() * 140); // 堆更高
+                    
+                    // 修正生成範圍，隔板在 30%，所以球從 32% 開始
+                    // 讓球稍微堆積在隔板附近 (使用機率分佈)
+                    let leftVal;
+                    if (Math.random() > 0.6) {
+                        // 60% 機率均勻分佈在右側
+                        leftVal = 32 + Math.random() * 60; // 32% ~ 92%
+                    } else {
+                        // 40% 機率集中在隔板附近，製造堆積感
+                        leftVal = 32 + Math.random() * 20; // 32% ~ 52%
+                    }
+
+                    // 90% 的球是前景球，用來遮擋，確保爪子一定會被擋住
+                    const isForeground = Math.random() > 0.1;
+                    const zIndex = isForeground ? 50 : 10;
+                    
+                    // 偶爾有一些大球在裡面
+                    const isBig = Math.random() > 0.9; 
+
+                    newBalls.push({
+                        id: `ball-${i}`,
+                        type: isBig ? 'big' : 'normal',
+                        size: isBig ? 'w-14 h-14' : 'w-10 h-10',
+                        left: leftVal,
+                        bottom: bottomVal,
+                        zIndex: zIndex, 
+                        rotation: Math.random() * 360,
+                        color: COLORS[i % COLORS.length],
+                        visible: true
+                    });
+                }
+                setPileBalls(newBalls);
+            }, []);
+
+            const handlePlay = (e) => {
+                e.preventDefault();
+                if(!name || code.length !== 4) return;
+
+                const upperCode = code.toUpperCase();
+                const codeData = data.codes[upperCode];
+
+                if (!codeData) {
+                    showMsg("無效的亂碼條，請確認輸入是否正確！", "error");
+                    return;
+                }
+                if (codeData.isUsed) {
+                    showMsg("這張亂碼條已經使用過囉！", "error");
+                    return;
+                }
+
+                // 決定結果
+                const prize = data.prizes.find(p => p.id === codeData.prizeId);
+                const isWin = prize.type !== 'none';
+                
+                // --- 暗箱操作邏輯 ---
+                // 目標位置限制在有球的區域 (隔板右側)
+                const targetX = 35 + Math.random() * 50; 
+                
+                // 深度設定：必須夠深，確保爪子尖端被球堆淹沒
+                const dropTopPercent = 80; 
+
+                setResult({ 
+                    prizeName: prize.name, 
+                    type: prize.type, 
+                    color: prize.color,
+                    isWin: isWin
+                });
+                
+                // 更新後端資料
+                const newCodes = { ...data.codes };
+                newCodes[upperCode] = { ...codeData, isUsed: true };
+                saveData({ ...data, codes: newCodes });
+
+                startAnimation(prize.type, targetX, dropTopPercent, prize.color);
+            };
+
+            const startAnimation = (prizeType, targetX, dropTopPercent, prizeColor) => {
+                setGameState("animating");
+                
+                const claw = clawRef.current;
+                const grabbedBall = prizeInClawRef.current;
+                
+                // 1. 移動 (Move)
+                claw.style.transition = `left 1500ms ease-in-out`;
+                claw.style.left = `${targetX}%`;
+
+                setTimeout(() => {
+                    // 2. 下降 (Drop) - 深入球堆
+                    claw.style.transition = `top 1500ms cubic-bezier(0.5, 0, 0.5, 1)`;
+                    claw.style.top = `${dropTopPercent}%`; 
+                    
+                    document.getElementById('left-finger').style.transform = "rotate(35deg)";
+                    document.getElementById('right-finger').style.transform = "rotate(-35deg)";
+
+                    setTimeout(() => {
+                        // 3. 抓取 (Grab)
+                        document.getElementById('left-finger').style.transform = "rotate(5deg)";
+                        document.getElementById('right-finger').style.transform = "rotate(-5deg)";
+                        
+                        // --- 這裡是關鍵 ---
+                        // 爪子已經在球堆裡了 (被前景球擋住)
+                        if (prizeType !== 'none') {
+                            grabbedBall.style.opacity = 1; // 顯示爪中球
+                            const sizeClass = prizeType === 'big' ? 'w-12 h-12 -bottom-8' : 'w-8 h-8 -bottom-4';
+                            grabbedBall.className = `${sizeClass} rounded-full absolute left-1/2 -translate-x-1/2 shadow-md ${prizeColor || 'bg-blue-400'}`;
+                        } else {
+                            // 銘謝惠顧：假裝抓到一顆灰球
+                            grabbedBall.style.opacity = 1;
+                            grabbedBall.className = `w-8 h-8 -bottom-4 rounded-full absolute left-1/2 -translate-x-1/2 shadow-md bg-gray-400`;
+                        }
+                        
+                        setTimeout(() => {
+                            // 4. 上升 (Rise)
+                            claw.style.transition = `top 1500ms cubic-bezier(0.5, 0, 0.5, 1)`;
+                            claw.style.top = `10%`;
+                            
+                            // 銘謝惠顧半路掉球
+                            if (prizeType === 'none') {
+                                setTimeout(() => {
+                                    document.getElementById('left-finger').style.transform = "rotate(25deg)";
+                                    document.getElementById('right-finger').style.transform = "rotate(-25deg)";
+                                    grabbedBall.style.transition = "top 0.5s ease-in, opacity 0.2s ease-out";
+                                    grabbedBall.style.top = "300px";
+                                    grabbedBall.style.opacity = 0;
+                                }, 600); 
+                            }
+
+                            setTimeout(() => {
+                                // 5. 歸位 (Return) - 回到洞口上方 (15%的位置)
+                                claw.style.transition = `left 1000ms ease-in-out`;
+                                claw.style.left = `15%`;
+
+                                setTimeout(() => {
+                                    // 6. 放開 (Release)
+                                    if (prizeType !== 'none') {
+                                        document.getElementById('left-finger').style.transform = "rotate(35deg)";
+                                        document.getElementById('right-finger').style.transform = "rotate(-35deg)";
+                                        grabbedBall.style.transition = "top 0.5s ease-in, opacity 0.2s ease-out";
+                                        grabbedBall.style.top = "300px"; // 掉進洞口
+                                        grabbedBall.style.opacity = 0;
+                                    }
+
+                                    setTimeout(() => {
+                                        setGameState("result");
+                                    }, 800);
+
+                                }, 1200);
+                            }, 1600);
+                        }, 500);
+                    }, 1500);
+                }, 1500);
+            };
+
+            const resetGame = () => {
+                setGameState("input");
+                setName("");
+                setCode("");
+                setResult(null);
+                
+                if(clawRef.current) {
+                    clawRef.current.style.left = "50%";
+                    clawRef.current.style.top = "10%";
+                }
+                if(prizeInClawRef.current) {
+                    prizeInClawRef.current.style.opacity = 0;
+                    prizeInClawRef.current.style.top = "auto";
+                    prizeInClawRef.current.style.transition = ""; 
+                }
+                 document.getElementById('left-finger').style.transform = "rotate(25deg)";
+                 document.getElementById('right-finger').style.transform = "rotate(-25deg)";
+            };
+
+            return (
+                <div className="flex flex-col items-center min-h-screen bg-gray-900 p-4">
+                    <div className="w-full max-w-4xl flex justify-between items-center mb-4 text-white">
+                        <button onClick={() => setView('home')} className="flex items-center gap-2 hover:text-yellow-400">
+                            <RotateCcw size={20} /> 返回首頁
+                        </button>
+                        <div className="text-xl font-bold text-yellow-400">校園闖關大挑戰</div>
+                    </div>
+
+                    <div className="relative w-full max-w-md h-[500px] bg-gray-800 rounded-t-3xl border-8 border-pink-500 shadow-[0_0_50px_rgba(236,72,153,0.5)] overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white to-transparent opacity-10 pointer-events-none z-20"></div>
+                        <div className="absolute top-4 left-4 right-4 h-2 bg-gray-600 rounded z-10"></div>
+                        
+                        {/* 隔板 - 位於洞口與球池之間 */}
+                        <div className="absolute bottom-0 left-[30%] w-2 h-32 bg-gray-400/50 rounded-t-lg z-20 border-l border-white/20"></div>
+
+                        {/* 爪子層級 Z-30 */}
+                        <div ref={clawRef} className="absolute top-[10%] left-1/2 -translate-x-1/2 w-16 h-auto z-30 flex flex-col items-center" style={{ left: '50%' }}>
+                            <div className="w-1 h-[600px] bg-gray-400 -mt-[600px]"></div>
+                            <div className="w-8 h-6 bg-pink-600 rounded-t-lg relative">
+                                <div id="left-finger" className="absolute top-4 -left-2 w-2 h-8 bg-gray-300 origin-top-right rounded-bl-lg transition-transform duration-300" style={{transform: 'rotate(25deg)'}}></div>
+                                <div id="right-finger" className="absolute top-4 -right-2 w-2 h-8 bg-gray-300 origin-top-left rounded-br-lg transition-transform duration-300" style={{transform: 'rotate(-25deg)'}}></div>
+                                {/* 爪中球 */}
+                                <div ref={prizeInClawRef} className="opacity-0"></div>
+                            </div>
+                        </div>
+
+                        {/* 洞口 - 位於左側 0-30% */}
+                        <div className="absolute bottom-0 left-4 w-[25%] h-4 bg-black rounded-t-lg z-10 border-t-4 border-gray-600"></div>
+
+                        {/* 球堆區域 - 移到最下方但 zIndex 最高 */}
+                        <div className="absolute bottom-0 left-0 right-0 h-52 z-0 px-2 overflow-hidden pointer-events-none">
+                            {pileBalls.map(ball => (
+                                <div 
+                                    key={ball.id} 
+                                    className={`absolute ${ball.size} ${ball.color} ball transition-all duration-300 ease-out`} 
+                                    style={{
+                                        left: `${ball.left}%`,
+                                        bottom: `${ball.bottom}px`,
+                                        zIndex: ball.zIndex, // 10 (背景) 或 50 (前景，擋住爪子)
+                                        transform: `rotate(${ball.rotation}deg)`,
+                                    }}
+                                ></div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="w-full max-w-md bg-pink-600 p-6 rounded-b-3xl border-x-8 border-b-8 border-pink-700 shadow-xl">
+                        {gameState === 'input' ? (
+                            <form onSubmit={handlePlay} className="flex flex-col gap-4">
+                                <div className="bg-white rounded-lg p-4 shadow-inner">
+                                    <label className="block text-gray-700 font-bold mb-1">姓名</label>
+                                    <input 
+                                        type="text" 
+                                        value={name}
+                                        onChange={e => setName(e.target.value)}
+                                        className="w-full p-2 border-2 border-gray-300 rounded focus:border-pink-500 outline-none text-xl"
+                                        placeholder="闖關者姓名"
+                                    />
+                                    <label className="block text-gray-700 font-bold mt-3 mb-1">亂碼條代碼 (4碼)</label>
+                                    <input 
+                                        type="text" 
+                                        value={code}
+                                        onChange={e => setCode(e.target.value)}
+                                        maxLength={4}
+                                        className="w-full p-2 border-2 border-gray-300 rounded focus:border-pink-500 outline-none text-xl tracking-widest uppercase"
+                                        placeholder="A1B2"
+                                    />
+                                </div>
+                                <button type="submit" className="bg-yellow-400 hover:bg-yellow-300 text-pink-900 font-black text-2xl py-3 rounded-xl shadow-[0_4px_0_rgb(200,150,0)] active:shadow-none active:translate-y-1 transition">
+                                    啟動夾爪！
+                                </button>
+                            </form>
+                        ) : gameState === 'animating' ? (
+                            <div className="text-center text-white font-bold text-xl py-8 animate-pulse">機器運作中...</div>
+                        ) : (
+                            <div className="text-center bg-white rounded-xl p-6 shadow-lg animate-[bounce_0.5s_ease-out]">
+                                {result.isWin ? (
+                                    <>
+                                        <div className="text-4xl mb-2">🎉 恭喜夾中！</div>
+                                        <div className={`inline-block px-4 py-2 rounded-full text-white font-bold text-xl mb-2 ${result.color || 'bg-blue-500'}`}>
+                                            {result.prizeName}
+                                        </div>
+                                        <p className="text-gray-600">請向工作人員領取獎品</p>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="text-4xl mb-2">💨 哎呀！沒夾到</div>
+                                        <p className="text-xl font-bold text-gray-600 mb-2">{result.prizeName}</p>
+                                        <p className="text-sm text-gray-400">下次再接再厲！</p>
+                                    </>
+                                )}
+                                <button onClick={resetGame} className="mt-4 bg-pink-500 text-white py-2 px-6 rounded-full hover:bg-pink-600 transition">
+                                    下一位挑戰
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const AdminPanel = ({ data, saveData, setView, generateCodes, exportConfig, importConfig, exportToWord, showMsg }) => {
+            const [newPrize, setNewPrize] = useState({ name: "", count: 1, type: "normal" });
+            const [confirmGen, setConfirmGen] = useState(false);
+
+            // 兩段式生成按鈕邏輯
+            const handleGenerateClick = () => {
+                if (confirmGen) {
+                    generateCodes();
+                    setConfirmGen(false);
+                } else {
+                    setConfirmGen(true);
+                    setTimeout(() => setConfirmGen(false), 3000); // 3秒後重置
+                }
+            };
+
+            const addPrize = () => {
+                if(!newPrize.name) {
+                    showMsg("請輸入獎品名稱", "error");
+                    return;
+                }
+                const id = Date.now();
+                let color = "bg-blue-400";
+                if(newPrize.type === 'big') color = "bg-yellow-500";
+                if(newPrize.type === 'none') color = "bg-gray-300";
+
+                const updatedPrizes = [...data.prizes, { ...newPrize, id, color }];
+                saveData({ ...data, prizes: updatedPrizes });
+                setNewPrize({ name: "", count: 1, type: "normal" });
+                showMsg("已新增獎品");
+            };
+
+            const removePrize = (id) => {
+                const updatedPrizes = data.prizes.filter(p => p.id !== id);
+                saveData({ ...data, prizes: updatedPrizes });
+            };
+
+            const totalCodes = Object.keys(data.codes).length;
+            const usedCodes = Object.values(data.codes).filter(c => c.isUsed).length;
+
+            return (
+                <div className="min-h-screen bg-gray-100 p-8">
+                    <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-xl p-6">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-bold flex items-center gap-2"><Settings /> 教師後台設定</h2>
+                            <button onClick={() => setView('home')} className="text-blue-600 hover:underline">返回首頁</button>
+                        </div>
+
+                        {/* 0. 跨裝置存取/備份 */}
+                        <div className="mb-8 border-b pb-8 bg-blue-50 p-4 rounded-lg">
+                            <h3 className="text-lg font-bold mb-2 flex items-center gap-2">💾 跨裝置存取 (備份/還原)</h3>
+                            <p className="text-sm text-gray-600 mb-3">若要在不同裝置編輯，請先「下載設定檔」，再到另一台裝置「讀取設定檔」。</p>
+                            <div className="flex gap-4">
+                                <button onClick={exportConfig} className="bg-white border border-blue-500 text-blue-600 px-4 py-2 rounded hover:bg-blue-50 flex items-center gap-2">
+                                    <Download size={16} /> 下載目前設定 (備份)
+                                </button>
+                                <label className="bg-white border border-green-500 text-green-600 px-4 py-2 rounded hover:bg-green-50 flex items-center gap-2 cursor-pointer">
+                                    <Upload size={16} /> 讀取設定檔 (還原)
+                                    <input type="file" onChange={importConfig} accept=".json" className="hidden" />
+                                </label>
+                            </div>
+                        </div>
+
+                        {/* 1. 獎品設定 */}
+                        <div className="mb-8 border-b pb-8">
+                            <h3 className="text-xl font-bold mb-4">1. 設定獎品清單</h3>
+                            <div className="flex gap-2 mb-4 flex-wrap">
+                                <input 
+                                    type="text" 
+                                    placeholder="獎品名稱" 
+                                    className="border p-2 rounded flex-grow"
+                                    value={newPrize.name}
+                                    onChange={e => setNewPrize({...newPrize, name: e.target.value})}
+                                />
+                                <input 
+                                    type="number" 
+                                    placeholder="數量" 
+                                    className="border p-2 rounded w-24"
+                                    min="1"
+                                    value={newPrize.count}
+                                    onChange={e => setNewPrize({...newPrize, count: parseInt(e.target.value)})}
+                                />
+                                <select 
+                                    className="border p-2 rounded"
+                                    value={newPrize.type}
+                                    onChange={e => setNewPrize({...newPrize, type: e.target.value})}
+                                >
+                                    <option value="normal">普通獎 (小球)</option>
+                                    <option value="big">大獎 (大球)</option>
+                                    <option value="none">銘謝惠顧 (無球)</option>
+                                </select>
+                                <button onClick={addPrize} className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">新增</button>
+                            </div>
+
+                            <div className="bg-gray-50 rounded p-4">
+                                <table className="w-full text-left">
+                                    <thead>
+                                        <tr className="border-b">
+                                            <th className="pb-2">名稱</th>
+                                            <th className="pb-2">類型</th>
+                                            <th className="pb-2">數量</th>
+                                            <th className="pb-2">操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {data.prizes.map(prize => (
+                                            <tr key={prize.id} className="border-b last:border-0">
+                                                <td className="py-2">{prize.name}</td>
+                                                <td className="py-2">
+                                                    {prize.type === 'big' && <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded">大獎</span>}
+                                                    {prize.type === 'normal' && <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">普通</span>}
+                                                    {prize.type === 'none' && <span className="bg-gray-200 text-gray-800 text-xs px-2 py-1 rounded">銘謝惠顧</span>}
+                                                </td>
+                                                <td className="py-2">{prize.count}</td>
+                                                <td className="py-2">
+                                                    <button onClick={() => removePrize(prize.id)} className="text-red-500 hover:text-red-700"><Trash2 size={18}/></button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                                {data.prizes.length === 0 && <p className="text-center text-gray-400 py-4">目前沒有獎品，請先新增</p>}
+                            </div>
+                        </div>
+
+                        {/* 2. 亂碼管理 (新增顯示列表) */}
+                        <div className="mb-8 border-b pb-8">
+                            <h3 className="text-xl font-bold mb-4">2. 亂碼管理</h3>
+                            <div className="flex items-center gap-4 mb-4">
+                                <div className="text-gray-600">
+                                    目前亂碼總數: <span className="font-bold text-black">{totalCodes}</span> (已使用: {usedCodes})
+                                </div>
+                                <button 
+                                    onClick={handleGenerateClick}
+                                    className={`px-6 py-2 rounded flex items-center gap-2 transition-all duration-300 ${confirmGen ? 'bg-red-600 text-white scale-105' : 'bg-purple-600 text-white hover:bg-purple-700'}`}
+                                >
+                                    <RotateCcw size={18} /> 
+                                    {confirmGen ? "⚠️ 確定要清除並重置嗎？(點擊執行)" : "生成/重置亂碼"}
+                                </button>
+                            </div>
+                            
+                            {/* 新增: 亂碼明細列表 */}
+                            {totalCodes > 0 && (
+                                <div className="mt-4 bg-gray-50 p-4 rounded max-h-60 overflow-y-auto border border-gray-200">
+                                    <h4 className="font-bold mb-2 flex items-center gap-2 text-gray-700">
+                                        <FileText size={16}/> 已生成的亂碼明細
+                                    </h4>
+                                    <table className="w-full text-sm text-left">
+                                        <thead className="bg-gray-100 sticky top-0">
+                                            <tr>
+                                                <th className="py-2 px-2">代碼</th>
+                                                <th className="py-2 px-2">對應獎品</th>
+                                                <th className="py-2 px-2">狀態</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {Object.entries(data.codes).map(([code, info]) => {
+                                                const prize = data.prizes.find(p => p.id === info.prizeId);
+                                                return (
+                                                    <tr key={code} className="border-b last:border-0 hover:bg-gray-100">
+                                                        <td className="py-2 px-2 font-mono font-bold text-lg text-purple-700">{code}</td>
+                                                        <td className="py-2 px-2 text-gray-700">{prize ? prize.name : '未知'}</td>
+                                                        <td className="py-2 px-2">
+                                                            {info.isUsed ? 
+                                                                <span className="bg-red-100 text-red-600 px-2 py-1 rounded text-xs">已使用</span> : 
+                                                                <span className="bg-green-100 text-green-600 px-2 py-1 rounded text-xs">未使用</span>
+                                                            }
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                            
+                            <p className="text-sm text-red-500 mt-2">* 按下生成會根據上方獎品清單重新產生亂碼，舊的亂碼將失效。</p>
+                        </div>
+
+                        {/* 3. 匯出/列印 */}
+                        <div>
+                            <h3 className="text-xl font-bold mb-4">3. 匯出票券</h3>
+                            <div className="flex gap-4">
+                                <button 
+                                    onClick={() => setView('print')}
+                                    className="bg-gray-600 text-white px-6 py-3 rounded hover:bg-gray-700 flex items-center gap-2 text-lg shadow-lg"
+                                    disabled={totalCodes === 0}
+                                >
+                                    <Printer /> 預覽並列印
+                                </button>
+                                <button 
+                                    onClick={exportToWord}
+                                    className="bg-blue-600 text-white px-6 py-3 rounded hover:bg-blue-700 flex items-center gap-2 text-lg shadow-lg"
+                                    disabled={totalCodes === 0}
+                                >
+                                    <FileText /> 匯出 Word 檔
+                                </button>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            );
+        };
+
+        const PrintView = ({ data, setView, exportToWord }) => {
+            return (
+                <div className="bg-white min-h-screen p-8">
+                    <div className="no-print flex justify-between items-center mb-8 bg-gray-100 p-4 rounded shadow">
+                        <h2 className="text-2xl font-bold">亂碼條預覽</h2>
+                        <div className="flex gap-4">
+                             <button onClick={exportToWord} className="bg-blue-500 text-white px-6 py-2 rounded font-bold hover:bg-blue-600 flex items-center gap-2">
+                                <FileText size={20}/> 下載 Word
+                            </button>
+                            <button onClick={() => window.print()} className="bg-gray-600 text-white px-6 py-2 rounded font-bold hover:bg-gray-700 flex items-center gap-2">
+                                <Printer size={20}/> 直接列印
+                            </button>
+                            <button onClick={() => setView('admin')} className="bg-gray-500 text-white px-6 py-2 rounded font-bold hover:bg-gray-600">
+                                返回後台
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="text-center no-print text-gray-500 mb-4">
+                        提示：下方為預覽畫面，實際請點擊上方按鈕下載 Word 檔以獲得最佳列印效果。
+                    </div>
+
+                    {/* 票券表格預覽 - 改為表格樣式以符合 Word 匯出邏輯 */}
+                    <div className="max-w-4xl mx-auto border border-gray-300 p-8 bg-white shadow-lg print:shadow-none print:border-none">
+                        <h2 className="text-center text-2xl font-bold mb-4">校園闖關 - 抽獎亂碼條</h2>
+                        <div className="grid grid-cols-3 gap-0 border border-black">
+                            {Object.keys(data.codes).map((code, index) => {
+                                const blessing = BLESSINGS[index % BLESSINGS.length];
+                                return (
+                                    <div key={code} className="border border-black border-dashed p-4 flex flex-col items-center justify-center h-32 bg-white text-center">
+                                        <div className="text-xs text-gray-500">NO.{index + 1}</div>
+                                        <div className="text-3xl font-bold font-mono my-1">{code}</div>
+                                        <div className="text-sm">{blessing}</div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
