@@ -13,4 +13,4 @@
 - 匯出 Word 檔：學生用的代碼條（每列 3 張），老師用的抽獎檢核表（含獲獎人簽名欄）。
 - 換裝置時，先「下載設定檔」備份，再到另一台裝置「讀取設定檔」還原。
 
-遊戲網址：<https://daimg49-gif.github.io/school-claw-machine/>
+遊戲網址：<https://peitt1940-creator.github.io/school-claw-machine2/>
